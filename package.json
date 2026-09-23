@@ -1,0 +1,8 @@
+{
+  "name": "fresher-vr-stall",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npx serve . -p 8080",
+    "vr": "adb reverse tcp:8080 tcp:8080 && npx serve . -p 8080"
+  }
+}

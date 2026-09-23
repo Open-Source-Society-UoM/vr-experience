@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Psychedelic VR Stall</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="logic.js"></script>
+  </head>
+  <body>
+    <a-scene background="color: #111">
+      <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
+        <a-cursor color="#FFF"></a-cursor>
+      </a-camera>
+      
+      <a-torus-knot 
+        position="0 1.5 -3" 
+        color="#ff00ff" 
+        arc="180" 
+        pbr="roughness: 0.1; metalness: 0.8"
+        spin-on-gaze>
+      </a-torus-knot>
+
+      <a-sky color="#000022"></a-sky>
+    </a-scene>
+  </body>
+</html>
