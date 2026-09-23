@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/build/
+*.apk
+*.aab
+
+# Capacitor generated
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+
+# Local env
+.env
+.env.local
+*.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
