@@ -1,0 +1,11 @@
+{
+  "appId": "com.oss.vrexperience",
+  "appName": "Open Source Society",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "minWebViewVersion": 80
+  }
+}

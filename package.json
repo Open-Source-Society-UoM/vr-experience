@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "scripts": {
     "start": "npx serve . -p 8080",
-    "vr": "adb reverse tcp:8080 tcp:8080 && npx serve . -p 8080"
+    "vr": "adb reverse tcp:8080 tcp:8080 && npx serve . -p 8080",
+    "build": "cp index.html logic.js www/ && npx cap sync android",
+    "apk": "npm run build && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/cli": "^6.2.2",
+    "@capacitor/core": "^6.2.2"
   }
 }

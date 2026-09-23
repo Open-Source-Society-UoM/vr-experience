@@ -994,3 +994,173 @@ AFRAME.registerComponent('world-effects', {
     }
   }
 });
+
+// ══════════════════════════════════════════════════
+// FIREWORK GUN
+// Trigger either controller → glowing projectile
+// arcs with gravity → explodes into rainbow burst.
+// ══════════════════════════════════════════════════
+AFRAME.registerComponent('firework-gun', {
+  init: function () {
+    this._projectiles = [];
+    this._explosions  = [];
+    this._tmpPos = new THREE.Vector3();
+    this._tmpDir = new THREE.Vector3();
+
+    const fire = (handId) => {
+      const hand = document.querySelector(handId);
+      if (!hand) return;
+      const pos = new THREE.Vector3();
+      const dir = new THREE.Vector3();
+      hand.object3D.getWorldPosition(pos);
+      // forward = -Z in Three.js world space for the hand object
+      hand.object3D.getWorldDirection(dir);
+      dir.negate();
+      this._spawnProjectile(pos, dir);
+    };
+
+    // Hook up both controllers once scene is ready
+    this.el.sceneEl.addEventListener('loaded', () => {
+      const left  = document.querySelector('#leftHand');
+      const right = document.querySelector('#rightHand');
+      if (left)  left.addEventListener('triggerdown',  () => fire('#leftHand'));
+      if (right) right.addEventListener('triggerdown', () => fire('#rightHand'));
+    });
+  },
+
+  _spawnProjectile: function (pos, dir) {
+    const geo = new THREE.SphereGeometry(0.06, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 1,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    // Add a glowing halo ring around the ball
+    const ringGeo = new THREE.TorusGeometry(0.12, 0.015, 6, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.6,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    mesh.add(ring);
+
+    this.el.object3D.add(mesh);
+    this._projectiles.push({
+      mesh, mat, ringMat,
+      vel: dir.clone().multiplyScalar(18),
+      life: 0, maxLife: 1800,
+      hue: Math.random()
+    });
+  },
+
+  _explode: function (pos, hue) {
+    const COUNT = 100;
+    const positions  = new Float32Array(COUNT * 3);
+    const velocities = [];
+
+    for (let i = 0; i < COUNT; i++) {
+      positions[i*3]   = pos.x;
+      positions[i*3+1] = pos.y;
+      positions[i*3+2] = pos.z;
+      const spd = Math.random() * 9 + 3;
+      velocities.push(new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2
+      ).normalize().multiplyScalar(spd));
+    }
+
+    const geo     = new THREE.BufferGeometry();
+    const posAttr = new THREE.BufferAttribute(positions, 3);
+    geo.setAttribute('position', posAttr);
+
+    const mat = new THREE.PointsMaterial({
+      size: 0.18, color: new THREE.Color().setHSL(hue, 1, 0.7),
+      transparent: true, opacity: 1,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+
+    const points = new THREE.Points(geo, mat);
+    this.el.object3D.add(points);
+
+    // Secondary ring of sparks at offset hue
+    const mat2 = new THREE.PointsMaterial({
+      size: 0.1, color: new THREE.Color().setHSL((hue + 0.5) % 1, 1, 0.8),
+      transparent: true, opacity: 0.8,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const geo2 = geo.clone();
+    const points2 = new THREE.Points(geo2, mat2);
+    this.el.object3D.add(points2);
+
+    this._explosions.push({
+      points, mat, geo, posAttr,
+      points2, mat2, geo2,
+      posCopy: Array.from(positions),
+      velocities, hue,
+      life: 0, maxLife: 2200, COUNT
+    });
+  },
+
+  tick: function (t, dt) {
+    const dt_s = dt * 0.001;
+    const c = new THREE.Color();
+
+    // ── projectiles ──────────────────────────────
+    this._projectiles = this._projectiles.filter(p => {
+      p.life += dt;
+      p.vel.y -= 6 * dt_s; // gravity
+      p.mesh.position.addScaledVector(p.vel, dt_s);
+      p.mesh.rotation.x += 0.08;
+      p.mesh.rotation.z += 0.06;
+
+      const prog = p.life / p.maxLife;
+      c.setHSL((p.hue + prog * 0.4) % 1, 1, 0.75);
+      p.mat.color.copy(c);
+      p.ringMat.color.copy(c);
+      p.mat.opacity    = 1 - prog * 0.3;
+      p.ringMat.opacity = (1 - prog) * 0.8;
+
+      if (p.life >= p.maxLife) {
+        this._explode(p.mesh.position.clone(), p.hue);
+        this.el.object3D.remove(p.mesh);
+        return false;
+      }
+      return true;
+    });
+
+    // ── explosions ───────────────────────────────
+    this._explosions = this._explosions.filter(exp => {
+      exp.life += dt;
+      const prog = exp.life / exp.maxLife;
+
+      for (let i = 0; i < exp.COUNT; i++) {
+        exp.velocities[i].multiplyScalar(0.96);
+        exp.velocities[i].y -= 1.5 * dt_s;
+        exp.posCopy[i*3]   += exp.velocities[i].x * dt_s;
+        exp.posCopy[i*3+1] += exp.velocities[i].y * dt_s;
+        exp.posCopy[i*3+2] += exp.velocities[i].z * dt_s;
+      }
+      exp.posAttr.array.set(exp.posCopy);
+      exp.posAttr.needsUpdate = true;
+      exp.geo2.attributes.position.array.set(exp.posCopy);
+      exp.geo2.attributes.position.needsUpdate = true;
+
+      const fade = 1 - prog;
+      exp.mat.opacity  = fade;
+      exp.mat2.opacity = fade * 0.7;
+      c.setHSL((exp.hue + prog * 0.5) % 1, 1, 0.75);
+      exp.mat.color.copy(c);
+
+      if (exp.life >= exp.maxLife) {
+        exp.geo.dispose();  exp.mat.dispose();
+        exp.geo2.dispose(); exp.mat2.dispose();
+        this.el.object3D.remove(exp.points);
+        this.el.object3D.remove(exp.points2);
+        return false;
+      }
+      return true;
+    });
+  }
+});

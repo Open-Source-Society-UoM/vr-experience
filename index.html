@@ -37,7 +37,14 @@
                     depthTest: false; depthWrite: false">
         </a-plane>
       </a-camera>
+
+      <!-- Controllers must be children of cameraRig so they
+           inherit its world transform and track the real headset pose. -->
+      <a-entity id="leftHand"  hand-controls="hand: left;  handModelStyle: lowPoly; color: #ff88ff"></a-entity>
+      <a-entity id="rightHand" hand-controls="hand: right; handModelStyle: lowPoly; color: #ff88ff"></a-entity>
     </a-entity>
+
+    <a-entity firework-gun></a-entity>
 
     <!-- ── WORLD ROOT ───────────────────────────────────────────
          Everything inside here is spun/scaled by world-effects.
