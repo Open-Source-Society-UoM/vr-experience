@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Open Source Society — Psychedelic VR</title>
+  <script src="aframe.min.js"></script>
+  <script src="logic.js"></script>
+  <style>
+    body { margin: 0; background: #000; overflow: hidden; }
+    canvas { filter: saturate(1.6) brightness(1.15) contrast(1.05); }
+  </style>
+</head>
+<body>
+  <a-scene
+    fog="type: exponential; color: #000000; density: 0.022"
+    renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true"
+    background="color: #000011">
+
+    <!-- ── FIXED BACKGROUND (not affected by world-effects) ── -->
+    <a-sky color-cycle-sky color="#000022" radius="500"></a-sky>
+    <a-entity static-starfield></a-entity>
+    <a-entity space-nebula></a-entity>
+
+    <!-- ── CAMERA RIG ───────────────────────────────────────── -->
+    <a-entity id="cameraRig" camera-sway>
+      <a-camera position="0 1.6 0"
+                look-controls="pointerLockEnabled: false"
+                wasd-controls="acceleration: 20">
+        <a-cursor color="#ffffff" fuse="false" opacity="0.5"></a-cursor>
+
+        <!-- Full-viewport overlay for strobe-flash effect.
+             At z=-0.4 a 4×3 plane covers ~80° FOV. -->
+        <a-plane id="flash-overlay"
+          position="0 0 -0.4" width="4" height="3"
+          material="color: #fff; opacity: 0; transparent: true;
+                    shader: flat; side: double;
+                    depthTest: false; depthWrite: false">
+        </a-plane>
+      </a-camera>
+
+      <!-- Controllers must be children of cameraRig so they
+           inherit its world transform and track the real headset pose. -->
+      <a-entity id="leftHand"  hand-controls="hand: left;  handModelStyle: lowPoly; color: #ff88ff"></a-entity>
+      <a-entity id="rightHand" hand-controls="hand: right; handModelStyle: lowPoly; color: #ff88ff"></a-entity>
+    </a-entity>
+
+    <a-entity firework-gun></a-entity>
+
+    <!-- ── WORLD ROOT ───────────────────────────────────────────
+         Everything inside here is spun/scaled by world-effects.
+         Camera rig stays outside so it never gets scaled/spun. -->
+    <a-entity id="worldRoot" world-effects>
+
+      <!-- Warp stars -->
+      <a-entity warp-stars></a-entity>
+
+      <!-- Tunnels -->
+      <a-entity psychedelic-tunnel></a-entity>
+      <a-entity inner-tunnel></a-entity>
+
+      <!-- OSS glow text -->
+      <a-entity oss-glow-text position="0 2.8 -7"></a-entity>
+
+      <!-- Chaos cluster + swarm -->
+      <a-entity chaos-cluster position="0 1.6 -11"></a-entity>
+      <a-entity sphere-swarm  position="0 1.6 -11"></a-entity>
+
+      <!-- Acid ribbons -->
+      <a-entity acid-ribbons position="0 1.6 -10"></a-entity>
+
+      <!-- Mandala -->
+      <a-entity mandala position="0 1.6 -20"></a-entity>
+
+      <!-- Floor grid (lowered by height-abyss effect) -->
+      <a-entity floor-grid></a-entity>
+
+      <!-- Particles -->
+      <a-entity psychedelic-dust position="0 2 -12"></a-entity>
+      <a-entity rising-sparks   position="0 0.5 -7"></a-entity>
+
+      <!-- Extra scattered geometry -->
+      <a-torus-knot
+        position="-8 2.5 -9" color="#ff4400" radius="0.8" radius-tubular="0.1"
+        animation="property: rotation; to: 360 360 0; loop: true; dur: 4000; easing: linear"
+        animation__scale="property: scale; from: 1 1 1; to: 1.3 1.3 1.3; loop: true; dir: alternate; dur: 2200; easing: easeInOutSine">
+      </a-torus-knot>
+
+      <a-torus-knot
+        position="8 2 -9" color="#00ff88" radius="0.7" radius-tubular="0.09"
+        animation="property: rotation; to: -360 360 180; loop: true; dur: 5000; easing: linear"
+        animation__pulse="property: scale; from: 1 1 1; to: 1.4 1.4 1.4; loop: true; dir: alternate; dur: 1800; easing: easeInOutSine">
+      </a-torus-knot>
+
+      <a-sphere
+        position="0 8 -8" radius="1.5" color="#8800ff"
+        material="wireframe: true; opacity: 0.6"
+        animation="property: rotation; to: 0 360 360; loop: true; dur: 8000; easing: linear"
+        animation__scale="property: scale; from: 1 1 1; to: 2 2 2; loop: true; dir: alternate; dur: 3000; easing: easeInOutSine">
+      </a-sphere>
+
+      <a-torus
+        position="0 0.3 -9" radius="6" radius-tubular="0.08" color="#ff0088"
+        material="shader: flat; opacity: 0.5; side: double"
+        animation="property: rotation; from: 90 0 0; to: 90 360 0; loop: true; dur: 6000; easing: linear">
+      </a-torus>
+
+      <a-sphere
+        position="0 1.6 -30" radius="12" color="#002244"
+        material="wireframe: true; opacity: 0.35"
+        animation="property: rotation; to: 360 360 0; loop: true; dur: 20000; easing: linear">
+      </a-sphere>
+
+    </a-entity>
+    <!-- end #worldRoot -->
+
+    <!-- ── EFFECT SYSTEMS (outside worldRoot so they aren't spun/scaled) ── -->
+    <a-entity effect-controller></a-entity>
+    <a-entity looming-effect></a-entity>
+    <a-entity height-abyss></a-entity>
+    <a-entity strobe-flash></a-entity>
+
+    <!-- ── LIGHTS ────────────────────────────────────────────── -->
+    <a-entity cycling-lights></a-entity>
+    <a-light type="ambient" color="#1a1a2e" intensity="0.5"></a-light>
+
+  </a-scene>
+</body>
+</html>
