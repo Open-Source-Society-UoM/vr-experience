@@ -1,10 +1,90 @@
 // ══════════════════════════════════════════════════
 // OPEN SOURCE SOCIETY — Psychedelic VR logic.js
-// Libraries used: A-Frame 1.5 + THREE.js (bundled),
-//   aframe-particle-system-component (CDN)
+// Libraries: A-Frame 1.5 + THREE.js (bundled)
 // ══════════════════════════════════════════════════
 
-// ── SKY COLOR CYCLE ──────────────────────────────
+// ── SHARED EFFECT STATE ──────────────────────────
+// All components read from here to react to the active effect.
+window.OSS = { effect: null, intensity: 0, age: 0 };
+
+// ── EFFECT CONTROLLER ────────────────────────────
+// Shuffles 7 fear/disorientation effects, runs each ~2 min,
+// then gives the user a false sense of safety before the next one.
+AFRAME.registerComponent('effect-controller', {
+  init: function () {
+    this._effects = this._shuffle([
+      'height-drop',   // floor drops away — acrophobia
+      'horizon-loss',  // extreme camera roll — vestibular chaos
+      'flow-surge',    // aggressive forward/back rush — optical flow mismatch
+      'looming',       // objects accelerate directly at camera — startle reflex
+      'strobe',        // blackout + white flash — contrast shock
+      'scale-shift',   // world scales up/down — spatial confusion
+      'vortex',        // entire world spins — full disorientation
+    ]);
+    this._idx       = 0;
+    this._startT    = 0;
+    this._dur       = 0;
+    this._state     = 'warmup'; // warmup → idle → running → rampout
+    this._nextT     = 28000;    // first effect after 28 s warmup
+    this.RAMP_IN    = 6000;
+    this.RAMP_OUT   = 4000;
+  },
+
+  _shuffle: function (a) {
+    const b = [...a];
+    for (let i = b.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [b[i], b[j]] = [b[j], b[i]];
+    }
+    return b;
+  },
+
+  tick: function (t) {
+    const oss = window.OSS;
+
+    if (this._state === 'warmup' || this._state === 'idle') {
+      oss.effect = null; oss.intensity = 0; oss.age = 0;
+      if (t >= this._nextT) this._start(t);
+      return;
+    }
+
+    const elapsed = t - this._startT;
+    oss.age = elapsed;
+
+    if (this._state === 'running') {
+      oss.intensity = Math.min(elapsed / this.RAMP_IN, 1);
+      if (elapsed >= this._dur - this.RAMP_OUT) this._state = 'rampout';
+
+    } else if (this._state === 'rampout') {
+      const ro = elapsed - (this._dur - this.RAMP_OUT);
+      oss.intensity = Math.max(1 - ro / this.RAMP_OUT, 0);
+      if (ro >= this.RAMP_OUT) {
+        oss.effect = null; oss.intensity = 0;
+        this._state = 'idle';
+        // Gap: 10-20 s — user thinks it's over
+        this._nextT = t + 10000 + Math.random() * 10000;
+      }
+    }
+  },
+
+  _start: function (t) {
+    const effect = this._effects[this._idx % this._effects.length];
+    this._idx++;
+    if (this._idx >= this._effects.length) {
+      this._effects = this._shuffle(this._effects);
+      this._idx = 0;
+    }
+    window.OSS.effect    = effect;
+    window.OSS.intensity = 0;
+    window.OSS.age       = 0;
+    this._startT = t;
+    this._dur    = 100000 + Math.random() * 40000; // 100-140 s
+    this._state  = 'running';
+    console.log(`[OSS] effect="${effect}" dur=${Math.round(this._dur/1000)}s`);
+  }
+});
+
+// ── SKY COLOR CYCLE — deep space palette ─────────
 AFRAME.registerComponent('color-cycle-sky', {
   init: function () {
     this._color = new THREE.Color();
@@ -16,21 +96,55 @@ AFRAME.registerComponent('color-cycle-sky', {
       if (c && c.material) this._mat = c.material;
       else return;
     }
-    this._mat.color.setHSL((t * 0.000018) % 1, 1, 0.07);
+    // Very dark: cycles through deep violet→blue→teal washes
+    this._mat.color.setHSL((t * 0.000006) % 1, 0.7, 0.025);
   }
 });
 
 // ── CAMERA SWAY & ROLL ───────────────────────────
-// Runs on the camera rig to add physical disorientation
+// Base: irrational-frequency sines. Each effect amplifies different axes.
 AFRAME.registerComponent('camera-sway', {
+  init: function () {
+    this.φ  = 1.6180339887;
+    this.r2 = 1.4142135624;
+    this.r3 = 1.7320508076;
+    this.r5 = 2.2360679775;
+  },
   tick: function (t) {
-    const s = t / 1000;
-    this.el.object3D.position.x = Math.sin(s * 0.7) * 0.45 + Math.sin(s * 0.23) * 0.25;
-    this.el.object3D.position.y = Math.sin(s * 0.53) * 0.3 + Math.sin(s * 0.19) * 0.12;
-    // Roll: two overlapping sine waves = unpredictable feel
-    this.el.object3D.rotation.z = Math.sin(s * 0.41) * 0.13 + Math.sin(s * 0.11) * 0.07;
-    // Slow forward/back drift creates depth confusion
-    this.el.object3D.position.z = Math.sin(s * 0.17) * 0.4;
+    const s = t * 0.001;
+    const { φ, r2, r3, r5 } = this;
+    const oss = window.OSS;
+    const fx  = oss.effect;
+    const i   = oss.intensity;
+
+    // Base sway (always on)
+    const xB    = Math.sin(s*0.61)*0.48 + Math.sin(s*0.61*φ)*0.30 + Math.sin(s*0.61*r2)*0.18 + Math.sin(s*0.61*r3)*0.11;
+    const yB    = Math.sin(s*0.44)*0.35 + Math.sin(s*0.44*φ)*0.20 + Math.sin(s*0.44*r5)*0.12;
+    const zB    = Math.sin(s*0.27)*0.65 + Math.sin(s*0.27*r3)*0.38 + Math.sin(s*0.27*φ)*0.20;
+    const rollB = Math.sin(s*0.37)*0.14 + Math.sin(s*0.37*φ)*0.09 + Math.sin(s*0.37*r2)*0.05;
+
+    let x = xB, y = yB, z = zB, roll = rollB;
+
+    if (fx === 'horizon-loss') {
+      // Horizon tilts up to ±45 degrees — vestibular system panics
+      roll = rollB + Math.sin(s*0.52)*i*0.65 + Math.sin(s*0.52*φ)*i*0.38;
+    } else if (fx === 'flow-surge') {
+      // Aggressive Z rush — feel like falling forward/backward through space
+      z = zB + Math.sin(s*0.85)*i*3.2 + Math.sin(s*0.85*φ)*i*1.8;
+    } else if (fx === 'height-drop') {
+      // Slow sink + amplified lateral sway — vertigo of falling
+      y = yB - i*1.8 + Math.sin(s*0.28)*i*0.5;
+      x = xB * (1 + i*0.9);
+    } else if (fx === 'looming') {
+      // Slight forward lean — instinctive duck
+      z = zB - i*0.9;
+    } else if (fx === 'vortex') {
+      // Tilt as the world spins around you
+      roll = rollB + Math.sin(s*0.15)*i*0.2;
+    }
+
+    this.el.object3D.position.set(x, y, z);
+    this.el.object3D.rotation.z = roll;
   }
 });
 
@@ -75,12 +189,15 @@ AFRAME.registerComponent('warp-stars', {
 });
 
 // ── PSYCHEDELIC TUNNEL ───────────────────────────
-// Color-cycling torus rings scrolling toward camera
+// Each ring has an irrational-frequency sine driving its speed,
+// so direction naturally reverses at different times per ring.
 AFRAME.registerComponent('psychedelic-tunnel', {
   init: function () {
     this.rings = [];
     const NUM = 30, SPACING = 5;
     this.totalLen = NUM * SPACING;
+    // Irrational multipliers — rings never sync their reversals
+    const φFactors = [1, 1.6180339887, 1.4142135624, 1.7320508076, 2.2360679775];
 
     for (let i = 0; i < NUM; i++) {
       const geo = new THREE.TorusGeometry(4.8, 0.06, 16, 90);
@@ -93,20 +210,27 @@ AFRAME.registerComponent('psychedelic-tunnel', {
       this.el.object3D.add(mesh);
       this.rings.push({
         mesh, mat,
-        baseZ: z,
+        pos: z,
         hueOff: (i / NUM),
         rotX: (Math.random() - 0.5) * 0.014,
-        rotZ: (Math.random() - 0.5) * 0.018
+        rotZ: (Math.random() - 0.5) * 0.018,
+        baseSpeed: 4 + Math.random() * 5,          // units/sec
+        φf: φFactors[i % φFactors.length],          // unique reversal frequency
+        phase: Math.random() * Math.PI * 2
       });
     }
   },
   tick: function (t, dt) {
-    const SPEED = 0.007;
+    const dt_s = dt * 0.001;
     const c = new THREE.Color();
     this.rings.forEach((r, i) => {
-      let z = r.baseZ + (t * SPEED % this.totalLen);
-      if (z > 4) z -= this.totalLen;
-      r.mesh.position.z = z;
+      // sine drives direction: positive = toward camera, negative = away
+      const dir = Math.sin(t * 0.0008 * r.φf + r.phase);
+      r.pos += dir * r.baseSpeed * dt_s;
+      // wrap seamlessly in both directions
+      if (r.pos >  6)              r.pos -= this.totalLen;
+      if (r.pos < -this.totalLen)  r.pos += this.totalLen;
+      r.mesh.position.z = r.pos;
       r.mesh.rotation.z += r.rotZ;
       r.mesh.rotation.x += r.rotX;
       c.setHSL(((r.hueOff + t * 0.00008) % 1), 1, 0.62);
@@ -116,12 +240,13 @@ AFRAME.registerComponent('psychedelic-tunnel', {
   }
 });
 
-// ── SECOND TUNNEL (inner, counter-rotating) ──────
+// ── SECOND TUNNEL (inner) ────────────────────────
 AFRAME.registerComponent('inner-tunnel', {
   init: function () {
     this.rings = [];
     const NUM = 20, SPACING = 6;
     this.totalLen = NUM * SPACING;
+    const φFactors = [1.6180339887, 1.4142135624, 2.2360679775, 1.7320508076, 1];
 
     for (let i = 0; i < NUM; i++) {
       const geo = new THREE.TorusGeometry(2.5, 0.05, 12, 60);
@@ -130,17 +255,25 @@ AFRAME.registerComponent('inner-tunnel', {
       const z = -i * SPACING - 2.5;
       mesh.position.set(0, 1.6, z);
       this.el.object3D.add(mesh);
-      this.rings.push({ mesh, mat, baseZ: z, hueOff: (i / NUM) + 0.5 });
+      this.rings.push({
+        mesh, mat,
+        pos: z,
+        hueOff: (i / NUM) + 0.5,
+        baseSpeed: 3 + Math.random() * 4,
+        φf: φFactors[i % φFactors.length],
+        phase: Math.random() * Math.PI * 2
+      });
     }
   },
-  tick: function (t) {
-    const SPEED = -0.004;
+  tick: function (t, dt) {
+    const dt_s = dt * 0.001;
     const c = new THREE.Color();
     this.rings.forEach((r, i) => {
-      let z = r.baseZ + (t * SPEED % this.totalLen);
-      if (z > 4)  z -= this.totalLen;
-      if (z < -this.totalLen) z += this.totalLen;
-      r.mesh.position.z = z;
+      const dir = Math.sin(t * 0.0006 * r.φf + r.phase);
+      r.pos += dir * r.baseSpeed * dt_s;
+      if (r.pos >  6)             r.pos -= this.totalLen;
+      if (r.pos < -this.totalLen) r.pos += this.totalLen;
+      r.mesh.position.z = r.pos;
       r.mesh.rotation.z = t * 0.0012 + i * 0.4;
       c.setHSL(((r.hueOff + t * 0.00006) % 1), 1, 0.7);
       r.mat.color.copy(c);
@@ -527,5 +660,337 @@ AFRAME.registerComponent('acid-ribbons', {
       c.setHSL((tube.def.hOff + t * 0.00005) % 1, 1, 0.65);
       tube.mat.color.copy(c);
     });
+  }
+});
+
+// ── STATIC STARFIELD ─────────────────────────────
+// Fixed background star dome — distinct from warp-stars.
+// Realistic color distribution: blue-white giants, yellow dwarfs, white.
+AFRAME.registerComponent('static-starfield', {
+  init: function () {
+    const COUNT = 5000;
+    const pos = new Float32Array(COUNT * 3);
+    const col = new Float32Array(COUNT * 3);
+    const c = new THREE.Color();
+    const R = 380;
+
+    for (let i = 0; i < COUNT; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      pos[i*3]   = R * Math.sin(phi) * Math.cos(theta);
+      pos[i*3+1] = R * Math.cos(phi);
+      pos[i*3+2] = R * Math.sin(phi) * Math.sin(theta);
+
+      // Realistic star color distribution
+      const roll = Math.random();
+      if      (roll < 0.55) c.setHSL(0.60, 0.25, 0.92); // blue-white
+      else if (roll < 0.75) c.setHSL(0.13, 0.55, 0.92); // yellow-white
+      else if (roll < 0.88) c.setHSL(0.05, 0.80, 0.85); // orange giant
+      else                  c.set(1, 1, 1);               // pure white
+
+      col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+
+    // Two layers: tiny dim stars + a few brighter ones
+    const matDim = new THREE.PointsMaterial({ size: 0.6,  vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85 });
+    const matBig = new THREE.PointsMaterial({ size: 1.8,  color: 0xffffff,    sizeAttenuation: true, transparent: true, opacity: 0.6  });
+
+    // Bright star positions (sparse)
+    const bCount = 200;
+    const bpos = new Float32Array(bCount * 3);
+    for (let i = 0; i < bCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      bpos[i*3]   = R * Math.sin(phi) * Math.cos(theta);
+      bpos[i*3+1] = R * Math.cos(phi);
+      bpos[i*3+2] = R * Math.sin(phi) * Math.sin(theta);
+    }
+    const bgeo = new THREE.BufferGeometry();
+    bgeo.setAttribute('position', new THREE.BufferAttribute(bpos, 3));
+
+    this.el.object3D.add(new THREE.Points(geo,  matDim));
+    this.el.object3D.add(new THREE.Points(bgeo, matBig));
+
+    // Subtle twinkle via opacity animation in tick
+    this._matDim = matDim;
+    this._matBig = matBig;
+  },
+  tick: function (t) {
+    // Very gentle twinkle
+    this._matDim.opacity = 0.8 + Math.sin(t * 0.0009) * 0.05;
+    this._matBig.opacity = 0.5 + Math.sin(t * 0.0013) * 0.1;
+  }
+});
+
+// ── SPACE NEBULA ─────────────────────────────────
+// Soft additive-blended point clouds forming colored nebula regions.
+// Uses a canvas radial-gradient texture so each point is a soft disc.
+AFRAME.registerComponent('space-nebula', {
+  init: function () {
+    // Soft circular sprite texture
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0,   'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.4)');
+    grad.addColorStop(1,   'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 128, 128);
+    const tex = new THREE.CanvasTexture(canvas);
+
+    // Each nebula: a colored point cloud at different positions/colors
+    const clouds = [
+      { center: [ 25, 10, -90],  radius: 35, color: new THREE.Color(0.7, 0.1, 1.0), count: 600, opacity: 0.35 }, // purple
+      { center: [-50, -5, -130], radius: 45, color: new THREE.Color(0.1, 0.4, 1.0), count: 700, opacity: 0.30 }, // blue
+      { center: [ 70, 25, -110], radius: 28, color: new THREE.Color(1.0, 0.2, 0.5), count: 450, opacity: 0.28 }, // pink
+      { center: [-15, 40, -160], radius: 55, color: new THREE.Color(0.2, 0.8, 0.7), count: 800, opacity: 0.25 }, // teal
+      { center: [  5,-20, -200], radius: 70, color: new THREE.Color(0.5, 0.1, 0.8), count: 900, opacity: 0.20 }, // deep violet
+    ];
+
+    clouds.forEach(def => {
+      const pos = new Float32Array(def.count * 3);
+      for (let i = 0; i < def.count; i++) {
+        const r     = def.radius * Math.cbrt(Math.random()); // cube-root: softer falloff
+        const theta = Math.random() * Math.PI * 2;
+        const phi   = Math.acos(2 * Math.random() - 1);
+        pos[i*3]   = def.center[0] + r * Math.sin(phi) * Math.cos(theta);
+        pos[i*3+1] = def.center[1] + r * Math.cos(phi) * 0.35; // flatten vertically
+        pos[i*3+2] = def.center[2] + r * Math.sin(phi) * Math.sin(theta);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        size: 5, color: def.color, map: tex,
+        transparent: true, opacity: def.opacity,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      });
+      this.el.object3D.add(new THREE.Points(geo, mat));
+    });
+  }
+  // No tick: nebulae are fixed background elements
+});
+
+// ══════════════════════════════════════════════════
+// FEAR EFFECT COMPONENTS
+// Each reads window.OSS and activates only when its
+// effect name matches. Intensity ramps 0→1 over 6 s.
+// ══════════════════════════════════════════════════
+
+// ── LOOMING OBJECTS ──────────────────────────────
+// Objects spawn far away then accelerate directly at the camera.
+// Pool-based so no GC pressure mid-effect.
+AFRAME.registerComponent('looming-effect', {
+  init: function () {
+    this._pool = [];
+    this._lastSpawn = 0;
+    this._spawnInterval = 5000;
+
+    const geos = [
+      new THREE.TorusKnotGeometry(4, 0.5, 60, 12, 2, 3),
+      new THREE.SphereGeometry(3.5, 14, 10),
+      new THREE.OctahedronGeometry(4),
+      new THREE.TorusGeometry(3.5, 0.9, 10, 40),
+      new THREE.IcosahedronGeometry(3.2),
+      new THREE.TorusKnotGeometry(3.5, 0.6, 60, 12, 3, 5),
+    ];
+
+    geos.forEach((geo, i) => {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0.88,
+        wireframe: i % 2 === 0
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.visible = false;
+      this.el.object3D.add(mesh);
+      this._pool.push({ mesh, mat, active: false, z: 0, speed: 0 });
+    });
+  },
+
+  tick: function (t, dt) {
+    const oss = window.OSS;
+    if (!oss || oss.effect !== 'looming') {
+      this._pool.forEach(o => { o.active = false; o.mesh.visible = false; });
+      return;
+    }
+
+    const dt_s = dt * 0.001;
+    const i = oss.intensity;
+
+    // Spawn cadence shortens as intensity grows
+    if (t - this._lastSpawn > this._spawnInterval) this._spawnOne(t, i);
+
+    const c = new THREE.Color();
+    this._pool.forEach(obj => {
+      if (!obj.active) return;
+      obj.z += obj.speed * dt_s;
+      obj.mesh.position.z = obj.z;
+      obj.mesh.rotation.x += 0.035;
+      obj.mesh.rotation.y += 0.04;
+      c.setHSL(((t * 0.0002 - obj.z * 0.002) % 1 + 1) % 1, 1, 0.6);
+      obj.mat.color.copy(c);
+      if (obj.z > 6) { obj.active = false; obj.mesh.visible = false; }
+    });
+  },
+
+  _spawnOne: function (t, intensity) {
+    if (intensity < 0.25) return;
+    const obj = this._pool.find(o => !o.active);
+    if (!obj) return;
+    obj.active = true;
+    obj.mesh.visible = true;
+    obj.z = -110 - Math.random() * 50;
+    obj.speed = 45 + Math.random() * 35 + intensity * 25;
+    // Near-miss offsets — close enough to feel threatening
+    obj.mesh.position.x = (Math.random() - 0.5) * 2.5;
+    obj.mesh.position.y = 1.6 + (Math.random() - 0.5) * 1.8;
+    obj.mesh.position.z = obj.z;
+    this._lastSpawn = t;
+    this._spawnInterval = 3500 + Math.random() * 3000;
+  }
+});
+
+// ── HEIGHT ABYSS ─────────────────────────────────
+// Drops the floor away and reveals an infinite-seeming pit below.
+// Deep glowing points suggest terrifying depth.
+AFRAME.registerComponent('height-abyss', {
+  init: function () {
+    // Inside-facing cylinder = pit walls stretching down
+    const geo = new THREE.CylinderGeometry(28, 6, 220, 36, 1, true);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x040008, side: THREE.BackSide, transparent: true, opacity: 0
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, -111, -5);
+    this.el.object3D.add(mesh);
+    this._abyssMat = mat;
+
+    // Faint colored points far below — suggest infinite depth
+    const pCount = 30;
+    const ppos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      ppos[i*3]   = (Math.random() - 0.5) * 18;
+      ppos[i*3+1] = -120 - Math.random() * 60;
+      ppos[i*3+2] = -5 + (Math.random() - 0.5) * 12;
+    }
+    const pgeo = new THREE.BufferGeometry();
+    pgeo.setAttribute('position', new THREE.BufferAttribute(ppos, 3));
+    this._glowMat = new THREE.PointsMaterial({
+      color: 0x5500ff, size: 2.5, transparent: true, opacity: 0
+    });
+    this.el.object3D.add(new THREE.Points(pgeo, this._glowMat));
+
+    this._floorEl  = null;
+    this._floorBaseY = 0;
+  },
+
+  tick: function (t) {
+    const oss    = window.OSS;
+    const active = oss && oss.effect === 'height-drop';
+    const i      = active ? oss.intensity : 0;
+
+    this._abyssMat.opacity = i * 0.94;
+    this._glowMat.opacity  = i * 0.75;
+    this._glowMat.color.setHSL((t * 0.00018) % 1, 1, 0.5 + Math.sin(t * 0.003) * 0.2);
+
+    if (!this._floorEl) {
+      this._floorEl = document.querySelector('[floor-grid]');
+      if (this._floorEl) this._floorBaseY = this._floorEl.object3D.position.y;
+    }
+    if (this._floorEl) {
+      const target = active ? -i * 28 : this._floorBaseY;
+      this._floorEl.object3D.position.y += (target - this._floorEl.object3D.position.y) * 0.025;
+    }
+  }
+});
+
+// ── STROBE FLASH ─────────────────────────────────
+// Alternates white flash and total blackout at irregular 0.5–3 Hz.
+// Irregularity (not constant frequency) maximises startle and disorientation.
+AFRAME.registerComponent('strobe-flash', {
+  init: function () {
+    this._mat         = null;
+    this._lastToggle  = 0;
+    this._interval    = 400;
+    this._isFlash     = false;
+  },
+
+  tick: function (t) {
+    if (!this._mat) {
+      const el = document.querySelector('#flash-overlay');
+      if (!el) return;
+      const mc = el.components && el.components.material;
+      if (mc && mc.material) this._mat = mc.material;
+      else return;
+    }
+
+    const oss = window.OSS;
+    if (!oss || oss.effect !== 'strobe') {
+      this._mat.opacity = 0;
+      return;
+    }
+
+    const i = oss.intensity;
+    // Frequency varies: 0.5–3 Hz using a slow sine so it feels unpredictable
+    const freqHz  = 0.5 + Math.abs(Math.sin(oss.age * 0.00028)) * 2.5;
+    const interval = 1000 / freqHz;
+
+    if (t - this._lastToggle > interval) {
+      this._isFlash    = !this._isFlash;
+      this._lastToggle = t;
+      // Randomise next interval slightly for extra unpredictability
+      this._interval = interval * (0.8 + Math.random() * 0.4);
+    }
+
+    if (this._isFlash) {
+      this._mat.color.set(0xffffff);
+      this._mat.opacity = i * 0.88;
+    } else {
+      this._mat.color.set(0x000000);
+      this._mat.opacity = i * 0.93;
+    }
+  }
+});
+
+// ── WORLD EFFECTS (on #worldRoot) ────────────────
+// Vortex: spins the entire geometry world around the camera.
+// Scale shift: pulses world scale between giant and tiny.
+AFRAME.registerComponent('world-effects', {
+  init: function () {
+    this._unitScale = new THREE.Vector3(1, 1, 1);
+    this._rotY      = 0;
+  },
+
+  tick: function (t, dt) {
+    const oss = window.OSS;
+    const obj = this.el.object3D;
+    const i   = oss ? oss.intensity : 0;
+
+    // VORTEX ─ world spins, camera stays fixed
+    if (oss && oss.effect === 'vortex') {
+      // Speed ramps up with intensity + slight pulse so it doesn't feel mechanical
+      const spinRate = i * 0.022 * (1 + Math.sin(oss.age * 0.0006) * 0.4);
+      this._rotY += spinRate;
+    } else {
+      this._rotY *= 0.992; // bleed rotation off when effect ends
+    }
+    obj.rotation.y = this._rotY;
+
+    // SCALE SHIFT ─ irrational sine sums so surges feel uncontrolled
+    if (oss && oss.effect === 'scale-shift') {
+      const a  = oss.age * 0.001;
+      const φ  = 1.6180339887;
+      const surge = Math.sin(a * 0.7) * 0.7 + Math.sin(a * 0.7 * φ) * 0.45;
+      const s  = 1 + surge * i * 1.6;
+      obj.scale.setScalar(Math.max(0.12, Math.min(s, 3.8)));
+    } else {
+      obj.scale.lerp(this._unitScale, 0.03);
+    }
   }
 });
