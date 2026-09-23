@@ -1,25 +1,124 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Psychedelic VR Stall</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="logic.js"></script>
-  </head>
-  <body>
-    <a-scene background="color: #111">
-      <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
-        <a-cursor color="#FFF"></a-cursor>
-      </a-camera>
-      
-      <a-torus-knot 
-        position="0 1.5 -3" 
-        color="#ff00ff" 
-        arc="180" 
-        pbr="roughness: 0.1; metalness: 0.8"
-        spin-on-gaze>
-      </a-torus-knot>
+<head>
+  <meta charset="utf-8">
+  <title>Open Source Society — Psychedelic VR</title>
 
-      <a-sky color="#000022"></a-sky>
-    </a-scene>
-  </body>
+  <!-- A-Frame core -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- All custom components -->
+  <script src="logic.js"></script>
+
+  <style>
+    body { margin: 0; background: #000; overflow: hidden; }
+    /* Boost saturation and brightness on the canvas for extra psychedelia */
+    canvas { filter: saturate(1.6) brightness(1.15) contrast(1.05); }
+  </style>
+</head>
+<body>
+  <a-scene
+    fog="type: exponential; color: #000000; density: 0.022"
+    renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true"
+    background="color: #000011">
+
+    <!-- ── CYCLING SKY ───────────────────────────── -->
+    <a-sky color-cycle-sky color="#000022" radius="500"></a-sky>
+
+    <!-- ── CAMERA RIG — sway + roll for disorientation -->
+    <a-entity id="cameraRig" camera-sway>
+      <a-camera position="0 1.6 0"
+                look-controls="pointerLockEnabled: false"
+                wasd-controls="acceleration: 20">
+        <a-cursor color="#ffffff" fuse="false" opacity="0.6"></a-cursor>
+      </a-camera>
+    </a-entity>
+
+    <!-- ── WARP STARS — rushing toward camera ───── -->
+    <a-entity warp-stars></a-entity>
+
+    <!-- ── OUTER TUNNEL — large rings, fast scroll ─ -->
+    <a-entity psychedelic-tunnel></a-entity>
+
+    <!-- ── INNER TUNNEL — tighter rings, counter-scroll -->
+    <a-entity inner-tunnel></a-entity>
+
+    <!-- ── OSS GLOW TEXT — multi-layer rainbow bloom -->
+    <a-entity oss-glow-text position="0 2.8 -7"></a-entity>
+
+    <!-- ── CHAOS CLUSTER — orbiting geometry storm ─ -->
+    <a-entity chaos-cluster position="0 1.6 -11"></a-entity>
+
+    <!-- ── SPHERE SWARM — morphing particle cloud ── -->
+    <a-entity sphere-swarm position="0 1.6 -11"></a-entity>
+
+    <!-- ── ACID RIBBONS — morphing Lissajous tubes ─ -->
+    <a-entity acid-ribbons position="0 1.6 -10"></a-entity>
+
+    <!-- ── MANDALA — giant spinning geometric array ─ -->
+    <a-entity mandala position="0 1.6 -20"></a-entity>
+
+    <!-- ── SCROLLING GRID FLOOR ───────────────────── -->
+    <a-entity floor-grid></a-entity>
+
+    <!-- ── CYCLING POINT LIGHTS ───────────────────── -->
+    <a-entity cycling-lights></a-entity>
+
+    <!-- Dim ambient so point lights feel dramatic -->
+    <a-light type="ambient" color="#1a1a2e" intensity="0.5"></a-light>
+
+    <!-- ── CUSTOM PARTICLES (pure Three.js, no external lib) ─ -->
+    <a-entity psychedelic-dust position="0 2 -12"></a-entity>
+    <a-entity rising-sparks   position="0 0.5 -7"></a-entity>
+
+    <!-- ── EXTRA SCATTERED GEOMETRY ─────────────────
+         Torus knots scattered around for environmental depth -->
+
+    <!-- Left floating knot -->
+    <a-torus-knot
+      position="-8 2.5 -9"
+      color="#ff4400"
+      radius="0.8" radius-tubular="0.1"
+      animation="property: rotation; to: 360 360 0; loop: true; dur: 4000; easing: linear"
+      animation__scale="property: scale; from: 1 1 1; to: 1.3 1.3 1.3; loop: true; dir: alternate; dur: 2200; easing: easeInOutSine">
+    </a-torus-knot>
+
+    <!-- Right floating knot -->
+    <a-torus-knot
+      position="8 2 -9"
+      color="#00ff88"
+      radius="0.7" radius-tubular="0.09"
+      animation="property: rotation; to: -360 360 180; loop: true; dur: 5000; easing: linear"
+      animation__pulse="property: scale; from: 1 1 1; to: 1.4 1.4 1.4; loop: true; dir: alternate; dur: 1800; easing: easeInOutSine">
+    </a-torus-knot>
+
+    <!-- High overhead sphere -->
+    <a-sphere
+      position="0 8 -8"
+      radius="1.5"
+      color="#8800ff"
+      material="wireframe: true; opacity: 0.6"
+      animation="property: rotation; to: 0 360 360; loop: true; dur: 8000; easing: linear"
+      animation__scale="property: scale; from: 1 1 1; to: 2 2 2; loop: true; dir: alternate; dur: 3000; easing: easeInOutSine">
+    </a-sphere>
+
+    <!-- Ground-level ring -->
+    <a-torus
+      position="0 0.3 -9"
+      radius="6" radius-tubular="0.08"
+      color="#ff0088"
+      material="shader: flat; opacity: 0.5; side: double"
+      animation="property: rotation; from: 90 0 0; to: 90 360 0; loop: true; dur: 6000; easing: linear">
+    </a-torus>
+
+    <!-- Deep background mega-sphere (wireframe) -->
+    <a-sphere
+      position="0 1.6 -30"
+      radius="12"
+      color="#002244"
+      material="wireframe: true; opacity: 0.35"
+      animation="property: rotation; to: 360 360 0; loop: true; dur: 20000; easing: linear">
+    </a-sphere>
+
+  </a-scene>
+</body>
 </html>
